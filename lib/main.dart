@@ -243,8 +243,8 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   void log(String message, ScrollController controller) {
     setState(() {
       output.add(message);
+      controller.jumpTo(controller.position.maxScrollExtent);
     });
-    controller.jumpTo(controller.position.maxScrollExtent);
   }
 
   void append(String message) {
@@ -522,6 +522,7 @@ class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
   var pcName = "";
   var status = "OFFLINE";
   var isLoading = false;
+  String debugInfo = "";
 
   @override
   Widget build(BuildContext context) {
@@ -541,6 +542,11 @@ class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
                 const Row(
                   children: [
                     Text('아래 "연결 확인" 버튼을 눌러 서버가 정상적으로 설치되었는지 확인하세요.'),
+                  ],
+                ),
+                const Row(
+                  children: [
+                    Text('(상태 업데이트에 30초 정도 시간이 걸릴 수 있습니다.)'),
                   ],
                 ),
                 const SizedBox(
@@ -569,12 +575,13 @@ class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
                           });
                           http
                               .get(Uri.parse(
-                                  'http://${apiHost}:${apiPort}/api/remote-pcs/${appState.repeaterId}'))
+                                  'http://$apiHost:$apiPort/api/remote-pcs/${appState.repeaterId}'))
                               .then((res) {
                             if (res.statusCode == 200) {
                               Map<String, dynamic> json = jsonDecode(res.body);
                               setState(() {
                                 status = json['status'];
+                                debugInfo = json.toString();
                               });
                             } else {
                               setState(() {
@@ -601,6 +608,7 @@ class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
                     }
                   ],
                 ),
+                Row(children: [Flexible(child: Text(debugInfo))]),
                 const Expanded(child: SizedBox()),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,

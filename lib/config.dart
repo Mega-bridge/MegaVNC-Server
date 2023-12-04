@@ -1,4 +1,4 @@
-const apiHost = "127.0.0.1";
+const apiHost = "192.168.0.4";
 const apiPort = "8080";
-const repeaterHost = "127.0.0.1";
+const repeaterHost = "192.168.0.31";
 const repeaterPort = "5500";
