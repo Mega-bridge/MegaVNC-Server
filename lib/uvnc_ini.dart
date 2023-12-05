@@ -1,5 +1,4 @@
-String getIniString(
-    String repeaterId, String repeaterHost, String repeaterPort) {
+String getIniString(int repeaterId, String repeaterHost, String repeaterPort) {
   return """
 [ultravnc]
 passwd=554D763944557454B2

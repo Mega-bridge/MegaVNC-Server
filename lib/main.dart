@@ -31,7 +31,7 @@ void main() async {
 class MyAppState extends ChangeNotifier {
   String? username;
   String? password;
-  String? repeaterId;
+  int? repeaterId;
   String? pcName;
 
   void setUsername(String username) {
@@ -42,7 +42,7 @@ class MyAppState extends ChangeNotifier {
     this.password = password;
   }
 
-  void setRepeaterId(String repeaterId) {
+  void setRepeaterId(int repeaterId) {
     this.repeaterId = repeaterId;
   }
 
@@ -214,7 +214,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<http.Response> requestLogin(String username, String password) {
     return http.post(
-      Uri.parse('http://${apiHost}:${apiPort}/api/auth/check'),
+      Uri.parse('http://$apiHost:$apiPort/api/auth/check'),
       headers: <String, String>{
         'Content-Type': 'application/json; charset=UTF-8',
       },
@@ -243,8 +243,8 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   void log(String message, ScrollController controller) {
     setState(() {
       output.add(message);
-      controller.jumpTo(controller.position.maxScrollExtent);
     });
+    controller.jumpTo(controller.position.maxScrollExtent);
   }
 
   void append(String message) {
@@ -400,8 +400,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
 
                         log("Request repeater ID... ", _listViewController);
                         http.Response response = await http.post(
-                          Uri.parse(
-                              "http://${apiHost}:${apiPort}/api/remote-pcs"),
+                          Uri.parse("http://$apiHost:$apiPort/api/remote-pcs"),
                           headers: <String, String>{
                             'Content-Type': 'application/json; charset=UTF-8',
                           },
@@ -423,10 +422,10 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           return;
                         }
 
-                        String repeaterId = json['repeaterId']!;
+                        int repeaterId = json['repeaterId']!;
                         appState.setRepeaterId(repeaterId);
                         appState.setPcName(pcNameController.text);
-                        append("Done ($repeaterId)");
+                        append("Done (ID:$repeaterId)");
 
                         log("Set repeater... ", _listViewController);
                         String iniString = getIniString(
