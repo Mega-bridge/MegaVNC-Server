@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:megavnc_server/config.dart';
 import 'package:megavnc_server/uvnc_ini.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -81,6 +82,21 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   TextEditingController usernameController = TextEditingController();
   TextEditingController passwordController = TextEditingController();
+
+  String versionInfo = '';
+
+  void getVersionInfo() async {
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      versionInfo = 'v${packageInfo.version} - Windows';
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    getVersionInfo();
+  }
 
   var isLoginProcessing = false;
 
@@ -204,7 +220,9 @@ class _LoginPageState extends State<LoginPage> {
                             ));
                         }
                       },
-              )
+              ),
+              const SizedBox(height: 10),
+              Text(versionInfo, style: Theme.of(context).textTheme.bodySmall)
             ],
           ),
         ),
