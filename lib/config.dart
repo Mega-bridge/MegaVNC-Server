@@ -1,4 +1,4 @@
-const apiHost = "192.168.0.4";
+const apiHost = "vnc.megabridge.co.kr";
 const apiPort = "8080";
-const repeaterHost = "192.168.0.31";
+const repeaterHost = "vnc.megabridge.co.kr";
 const repeaterPort = "5500";
