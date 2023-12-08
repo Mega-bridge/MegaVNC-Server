@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -250,24 +251,23 @@ class ServerSetupPage extends StatefulWidget {
 }
 
 class _ServerSetupPageState extends State<ServerSetupPage> {
-  var output = <String>[];
+  var output = Queue<String>();
   var isProcessing = false;
   final _pcInfoFormKey = GlobalKey<FormState>();
   var pcNameController = TextEditingController();
   var passwordInputController = TextEditingController();
   var setupFinished = false;
-  final _listViewController = ScrollController();
 
-  void log(String message, ScrollController controller) {
+  void log(String message) {
     setState(() {
-      output.add(message);
+      output.addFirst(message);
     });
-    controller.jumpTo(controller.position.maxScrollExtent);
   }
 
   void append(String message) {
     setState(() {
-      output[output.length - 1] = output[output.length - 1] + message;
+      String first = output.removeFirst();
+      output.addFirst(first + message);
     });
   }
 
@@ -362,48 +362,41 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
 
                         output.clear();
 
-                        log("Start", _listViewController);
+                        log("Start");
 
-                        log("Read uVNC executable from asset... ",
-                            _listViewController);
+                        log("Read uVNC executable from asset... ");
                         var exeBytes = await rootBundle
                             .load('assets/UltraVNC_1436_X64_Setup.exe');
                         append("Done");
 
-                        log("Read install configuration from asset... ",
-                            _listViewController);
+                        log("Read install configuration from asset... ");
                         var configBytes =
                             await rootBundle.load('assets/config.txt');
                         append("Done");
 
-                        log("Get application directory... ",
-                            _listViewController);
+                        log("Get application directory... ");
                         final appDir = await getApplicationDocumentsDirectory();
                         append("Done");
 
-                        log("Locate destination file... ", _listViewController);
+                        log("Locate destination file... ");
                         var exeFile =
                             File('${appDir.path}\\UltraVNC_1436_X64_Setup.exe');
                         append("Done");
 
-                        log("Locate install configuration file... ",
-                            _listViewController);
+                        log("Locate install configuration file... ");
                         var configFile = File('${appDir.path}\\config.txt');
                         append("Done");
 
-                        log("Copy uVNC executable to destination file... ",
-                            _listViewController);
+                        log("Copy uVNC executable to destination file... ");
                         exeFile.writeAsBytesSync(exeBytes.buffer.asUint8List());
                         append("Done");
 
-                        log("Copy configuration to destination file... ",
-                            _listViewController);
+                        log("Copy configuration to destination file... ");
                         configFile
                             .writeAsBytesSync(configBytes.buffer.asUint8List());
                         append("Done");
 
-                        log("Run uVNC executable process... ",
-                            _listViewController);
+                        log("Run uVNC executable process... ");
                         ProcessResult result = await Process.run(exeFile.path, [
                           '/verysilent',
                           '/loadinf=${configFile.path}',
@@ -411,12 +404,12 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                         ]);
                         append("Done (${result.exitCode})");
 
-                        log("Stop service... ", _listViewController);
+                        log("Stop service... ");
                         ProcessResult stopServiceResult =
                             await Process.run('net', ['stop', 'uvnc_service']);
                         append("Done (${stopServiceResult.exitCode})");
 
-                        log("Request repeater ID... ", _listViewController);
+                        log("Request repeater ID... ");
                         http.Response response = await http.post(
                           Uri.parse("http://$apiHost:$apiPort/api/remote-pcs"),
                           headers: <String, String>{
@@ -445,7 +438,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                         appState.setPcName(pcNameController.text);
                         append("Done (ID:$repeaterId)");
 
-                        log("Set repeater... ", _listViewController);
+                        log("Set repeater... ");
                         String iniString = getIniString(
                             repeaterId, repeaterHost, repeaterPort);
                         var iniFile = File(
@@ -453,24 +446,24 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                         await iniFile.writeAsString(iniString);
                         append("Done");
 
-                        log("Set password... ", _listViewController);
+                        log("Set password... ");
                         var setPasswordPath =
                             'C:\\Program Files\\uvnc bvba\\UltraVNC\\setpasswd.exe';
                         ProcessResult setPasswordResult = await Process.run(
                             setPasswordPath, [passwordInputController.text]);
                         append("Done (${setPasswordResult.exitCode})");
 
-                        log("Start service... ", _listViewController);
+                        log("Start service... ");
                         ProcessResult startServiceResult =
                             await Process.run('net', ['start', 'uvnc_service']);
                         append("Done (${startServiceResult.exitCode})");
 
-                        log("Remove install files... ", _listViewController);
+                        log("Remove install files... ");
                         await exeFile.delete();
                         await configFile.delete();
                         append("Done");
 
-                        log("Finish", _listViewController);
+                        log("Finish");
 
                         setState(() {
                           isProcessing = false;
@@ -481,8 +474,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           }
                         });
 
-                        log('설정이 완료되었습니다. 아래 "다음" 버튼을 눌러 진행하세요.',
-                            _listViewController);
+                        log('설정이 완료되었습니다. 아래 "다음" 버튼을 눌러 진행하세요.');
                       },
               ),
               const SizedBox(
@@ -496,7 +488,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                       borderRadius:
                           const BorderRadius.all(Radius.circular(8.0))),
                   child: ListView(
-                    controller: _listViewController,
                     children: output.map((e) => Text(e)).toList(),
                   ),
                 ),
@@ -539,7 +530,6 @@ class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
   var pcName = "";
   var status = "OFFLINE";
   var isLoading = false;
-  String debugInfo = "";
 
   @override
   Widget build(BuildContext context) {
@@ -598,7 +588,6 @@ class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
                               Map<String, dynamic> json = jsonDecode(res.body);
                               setState(() {
                                 status = json['status'];
-                                debugInfo = json.toString();
                               });
                             } else {
                               setState(() {
@@ -625,7 +614,6 @@ class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
                     }
                   ],
                 ),
-                Row(children: [Flexible(child: Text(debugInfo))]),
                 const Expanded(child: SizedBox()),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
