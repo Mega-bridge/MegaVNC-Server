@@ -89,7 +89,7 @@ class _LoginPageState extends State<LoginPage> {
   void getVersionInfo() async {
     PackageInfo packageInfo = await PackageInfo.fromPlatform();
     setState(() {
-      versionInfo = 'v${packageInfo.version} - Windows';
+      versionInfo = 'v${packageInfo.version} - Windows x64';
     });
   }
 
@@ -233,7 +233,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<http.Response> requestLogin(String username, String password) {
     return http.post(
-      Uri.parse('http://$apiHost:$apiPort/api/auth/check'),
+      Uri.parse('https://$apiHost:$apiPort/api/auth/check'),
       headers: <String, String>{
         'Content-Type': 'application/json; charset=UTF-8',
       },
@@ -411,7 +411,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
 
                         log("Request repeater ID... ");
                         http.Response response = await http.post(
-                          Uri.parse("http://$apiHost:$apiPort/api/remote-pcs"),
+                          Uri.parse("https://$apiHost:$apiPort/api/remote-pcs"),
                           headers: <String, String>{
                             'Content-Type': 'application/json; charset=UTF-8',
                           },
@@ -582,7 +582,7 @@ class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
                           });
                           http
                               .get(Uri.parse(
-                                  'http://$apiHost:$apiPort/api/remote-pcs/${appState.repeaterId}'))
+                                  'https://$apiHost:$apiPort/api/remote-pcs/${appState.repeaterId}'))
                               .then((res) {
                             if (res.statusCode == 200) {
                               Map<String, dynamic> json = jsonDecode(res.body);
