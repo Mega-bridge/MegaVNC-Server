@@ -8,10 +8,23 @@ import 'package:http/http.dart' as http;
 import 'package:megavnc_server/config.dart';
 import 'package:megavnc_server/http_override.dart';
 import 'package:megavnc_server/uvnc_ini.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
+
+class ResponseGroupApiDto {
+  final int groupId;
+  final String groupName;
+
+  ResponseGroupApiDto({required this.groupId, required this.groupName});
+
+  factory ResponseGroupApiDto.fromJson(Map<String, dynamic> json) {
+    return ResponseGroupApiDto(
+      groupId: json['groupId'],
+      groupName: json['groupName'],
+    );
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,18 +47,11 @@ void main() async {
 }
 
 class MyAppState extends ChangeNotifier {
-  String? username;
-  String? password;
   int? repeaterId;
   String? pcName;
-
-  void setUsername(String username) {
-    this.username = username;
-  }
-
-  void setPassword(String password) {
-    this.password = password;
-  }
+  String? accessPassword;
+  List<ResponseGroupApiDto> _groups = [];
+  List<ResponseGroupApiDto> get groups => _groups;
 
   void setRepeaterId(int repeaterId) {
     this.repeaterId = repeaterId;
@@ -53,6 +59,10 @@ class MyAppState extends ChangeNotifier {
 
   void setPcName(String pcName) {
     this.pcName = pcName;
+  }
+
+  void setAccessPassword(String accessPassword) {
+    this.accessPassword = accessPassword;
   }
 }
 
@@ -64,184 +74,13 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => MyAppState(),
       child: MaterialApp(
-        title: 'MegaVNC Server',
+        title: 'MegaVNC',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        home: const LoginPage(),
+        home: const ServerSetupPage(),
       ),
-    );
-  }
-}
-
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
-  final _formKey = GlobalKey<FormState>();
-  TextEditingController usernameController = TextEditingController();
-  TextEditingController passwordController = TextEditingController();
-
-  String versionInfo = '';
-
-  void getVersionInfo() async {
-    PackageInfo packageInfo = await PackageInfo.fromPlatform();
-    setState(() {
-      versionInfo = 'v${packageInfo.version} - Windows x64';
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    getVersionInfo();
-  }
-
-  var isLoginProcessing = false;
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-
-    return Scaffold(
-      appBar: AppBar(
-          foregroundColor: Theme.of(context).colorScheme.onPrimary,
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          title: const Text('MegaVNC Server')),
-      body: Form(
-        key: _formKey,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'MegaVNC 로그인',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 20.0),
-              TextFormField(
-                controller: usernameController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: '사용자명',
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return '사용자명을 입력하세요.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(
-                height: 10,
-              ),
-              TextFormField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                    border: OutlineInputBorder(), labelText: '비밀번호'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return '비밀번호를 입력하세요.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(
-                height: 20,
-              ),
-              FilledButton.icon(
-                icon: isLoginProcessing
-                    ? const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: Center(
-                              child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                          )),
-                        ),
-                      )
-                    : const SizedBox(),
-                label: const Text('로그인'),
-                onPressed: isLoginProcessing
-                    ? null
-                    : () async {
-                        if (_formKey.currentState!.validate()) {
-                          setState(() {
-                            isLoginProcessing = true;
-                          });
-
-                          var username = usernameController.text;
-                          var password = passwordController.text;
-
-                          requestLogin(username, password).then((res) {
-                            if (res.statusCode == 200) {
-                              appState.setUsername(username);
-                              appState.setPassword(password);
-
-                              ScaffoldMessenger.of(context)
-                                  .hideCurrentSnackBar();
-
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ServerSetupPage()));
-                            } else {
-                              ScaffoldMessenger.of(context)
-                                ..removeCurrentSnackBar()
-                                ..showSnackBar(SnackBar(
-                                  content:
-                                      const Text('사용자명 또는 비밀번호가 올바르지 않습니다.'),
-                                  action: SnackBarAction(
-                                    label: '닫기',
-                                    onPressed: () {},
-                                  ),
-                                ));
-                            }
-
-                            setState(() {
-                              isLoginProcessing = false;
-                            });
-                          });
-                        } else {
-                          ScaffoldMessenger.of(context)
-                            ..removeCurrentSnackBar()
-                            ..showSnackBar(SnackBar(
-                              content: const Text('사용자명과 비밀번호를 입력하세요.'),
-                              action: SnackBarAction(
-                                label: '닫기',
-                                onPressed: () {},
-                              ),
-                            ));
-                        }
-                      },
-              ),
-              const SizedBox(height: 10),
-              Text(versionInfo, style: Theme.of(context).textTheme.bodySmall)
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<http.Response> requestLogin(String username, String password) {
-    return http.post(
-      Uri.parse('https://$apiHost:$apiPort/api/auth/check'),
-      headers: <String, String>{
-        'Content-Type': 'application/json; charset=UTF-8',
-      },
-      body: jsonEncode(
-          <String, String>{'username': username, 'password': password}),
     );
   }
 }
@@ -255,11 +94,15 @@ class ServerSetupPage extends StatefulWidget {
 
 class _ServerSetupPageState extends State<ServerSetupPage> {
   var output = Queue<String>();
-  var isProcessing = false;
-  final _pcInfoFormKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
   var pcNameController = TextEditingController();
-  var passwordInputController = TextEditingController();
+  var accessPasswordController = TextEditingController();
+  var isProcessing = false;
   var setupFinished = false;
+  late Future<String> ipAdress;
+  ResponseGroupApiDto? _selectedGroup;
+
+  late Future<List<ResponseGroupApiDto>> fetchGroupsFuture;
 
   void log(String message) {
     setState(() {
@@ -275,8 +118,86 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    fetchGroupsFuture = fetchGroups();
+
+    ipAdress = getIPAddress();
+  }
+
+  void showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[700],
+      ),
+    );
+  }
+
+  Future<List<ResponseGroupApiDto>> fetchGroups() async {
+    try {
+      final response =
+          await http.get(Uri.parse('https://$apiHost:$apiPort/api/groups'));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonData =
+            jsonDecode(utf8.decode(response.bodyBytes));
+        final List<ResponseGroupApiDto> groups =
+            jsonData.map((json) => ResponseGroupApiDto.fromJson(json)).toList();
+        _selectedGroup ??= groups.isNotEmpty ? groups[0] : null;
+        return groups;
+      } else {
+        throw Exception('Failed to load groups');
+      }
+    } catch (error) {
+      showErrorSnackbar('Failed to fetch groups: $error');
+      rethrow;
+    }
+  }
+
+  Future<String> getIPAddress() async {
+    try {
+      for (var interface in await NetworkInterface.list()) {
+        for (var addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4) {
+            return addr.address;
+          }
+        }
+      }
+    } catch (error) {
+      showErrorSnackbar('Error getting IP address: $error');
+    }
+    showErrorSnackbar('Unable to get IP address');
+    return 'Unable to get IP address';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
+    var isInputEnabled = !isProcessing && !setupFinished;
+    final appState = Provider.of<MyAppState>(context);
+    // void copyDirectorySync(String sourcePath, String destinationPath) {
+    //   // 원본 디렉토리를 엽니다.
+    //   final sourceDir = Directory(sourcePath);
+
+    //   // 대상 디렉토리를 생성합니다.
+    //   Directory(destinationPath).createSync(recursive: true);
+
+    //   // 원본 디렉토리의 파일과 하위 디렉토리를 가져와서 반복합니다.
+    //   for (final entity in sourceDir.listSync(recursive: true)) {
+    //     // 파일인 경우 복사합니다.
+    //     if (entity is File) {
+    //       final newFile =
+    //           File('${destinationPath}\\${entity.path.split('\\').last}');
+    //       newFile.writeAsBytesSync(entity.readAsBytesSync());
+    //     }
+    //     // 디렉토리인 경우 재귀적으로 복사합니다.
+    //     else if (entity is Directory) {
+    //       final newDir =
+    //           Directory('${destinationPath}\\${entity.path.split('\\').last}');
+    //       copyDirectorySync(entity.path, newDir.path);
+    //     }
+    //   }
+    // }
 
     return Scaffold(
       appBar: AppBar(
@@ -291,18 +212,48 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
             children: [
               const Row(
                 children: [
-                  Text('1. 이 PC의 이름과, 접속할 때 사용할 비밀번호를 입력하세요.'),
+                  Text('1. 그룹을 선택하고 이 PC의 이름과, 접속할 때 사용할 비밀번호를 입력하세요.'),
                 ],
               ),
-              const SizedBox(
-                height: 20,
+              const SizedBox(height: 20),
+              FutureBuilder<List<ResponseGroupApiDto>>(
+                future: fetchGroupsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  } else if (snapshot.hasError) {
+                    return Center(child: Text('Error: ${snapshot.error}'));
+                  } else {
+                    final groups = snapshot.data;
+                    return DropdownButton<ResponseGroupApiDto>(
+                      isExpanded: true,
+                      hint: const Text('그룹을 선택하세요.'),
+                      value: _selectedGroup,
+                      onChanged: isInputEnabled
+                          ? (newValue) {
+                              setState(() {
+                                _selectedGroup = newValue;
+                              });
+                            }
+                          : null,
+                      items: groups!.map((group) {
+                        return DropdownMenuItem<ResponseGroupApiDto>(
+                          value: group,
+                          child: Text(group.groupName),
+                        );
+                      }).toList(),
+                    );
+                  }
+                },
               ),
+              const SizedBox(height: 20),
               Form(
-                key: _pcInfoFormKey,
+                key: _formKey,
                 child: Column(
                   children: [
                     TextFormField(
                       controller: pcNameController,
+                      enabled: isInputEnabled,
                       decoration: const InputDecoration(
                           border: OutlineInputBorder(), label: Text('PC 이름')),
                       validator: (value) {
@@ -314,7 +265,8 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                     ),
                     const SizedBox(height: 10),
                     TextFormField(
-                      controller: passwordInputController,
+                      controller: accessPasswordController,
+                      enabled: isInputEnabled,
                       obscureText: true,
                       decoration: const InputDecoration(
                           border: OutlineInputBorder(), label: Text('접속 비밀번호')),
@@ -328,12 +280,10 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                   ],
                 ),
               ),
-              const SizedBox(
-                height: 20,
-              ),
+              const SizedBox(height: 20),
               const Row(
                 children: [
-                  Text('2. 아래 "서버 설치" 버튼을 눌러 설정을 완료해주세요. (관리자 권한이 필요합니다.)'),
+                  Text('2. 아래 "연결" 버튼을 눌러 설정을 완료해주세요. (관리자 권한이 필요합니다.)'),
                 ],
               ),
               const SizedBox(height: 20),
@@ -351,11 +301,11 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                         ),
                       )
                     : const SizedBox(),
-                label: const Text('서버 설치'),
+                label: const Text('연결'),
                 onPressed: isProcessing
                     ? null
                     : () async {
-                        if (!_pcInfoFormKey.currentState!.validate()) {
+                        if (!_formKey.currentState!.validate()) {
                           return;
                         }
 
@@ -364,120 +314,206 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                         });
 
                         output.clear();
+                        try {
+                          log("Start");
 
-                        log("Start");
+                          log("Request repeater ID... ");
+                          String ipadress = await ipAdress;
 
-                        log("Read uVNC executable from asset... ");
-                        var exeBytes = await rootBundle
-                            .load('assets/UltraVNC_1436_X64_Setup.exe');
-                        append("Done");
+                          http.Response response = await http.post(
+                            Uri.parse(
+                                "https://$apiHost:$apiPort/api/remote-pcs"),
+                            headers: <String, String>{
+                              'Content-Type': 'application/json; charset=UTF-8',
+                            },
+                            body: jsonEncode(<String, String>{
+                              'groupName': _selectedGroup?.groupName ?? '',
+                              'accessPassword': accessPasswordController.text,
+                              'pcName': pcNameController.text,
+                              'ftpHost': ipadress
+                            }),
+                          );
+                          Map<String, dynamic> json =
+                              jsonDecode(utf8.decode(response.bodyBytes));
 
-                        log("Read install configuration from asset... ");
-                        var configBytes =
-                            await rootBundle.load('assets/config.txt');
-                        append("Done");
-
-                        log("Get application directory... ");
-                        final appDir = await getApplicationDocumentsDirectory();
-                        append("Done");
-
-                        log("Locate destination file... ");
-                        var exeFile =
-                            File('${appDir.path}\\UltraVNC_1436_X64_Setup.exe');
-                        append("Done");
-
-                        log("Locate install configuration file... ");
-                        var configFile = File('${appDir.path}\\config.txt');
-                        append("Done");
-
-                        log("Copy uVNC executable to destination file... ");
-                        exeFile.writeAsBytesSync(exeBytes.buffer.asUint8List());
-                        append("Done");
-
-                        log("Copy configuration to destination file... ");
-                        configFile
-                            .writeAsBytesSync(configBytes.buffer.asUint8List());
-                        append("Done");
-
-                        log("Run uVNC executable process... ");
-                        ProcessResult result = await Process.run(exeFile.path, [
-                          '/verysilent',
-                          '/loadinf=${configFile.path}',
-                          '/norestart'
-                        ]);
-                        append("Done (${result.exitCode})");
-
-                        log("Stop service... ");
-                        ProcessResult stopServiceResult =
-                            await Process.run('net', ['stop', 'uvnc_service']);
-                        append("Done (${stopServiceResult.exitCode})");
-
-                        log("Request repeater ID... ");
-                        http.Response response = await http.post(
-                          Uri.parse("https://$apiHost:$apiPort/api/remote-pcs"),
-                          headers: <String, String>{
-                            'Content-Type': 'application/json; charset=UTF-8',
-                          },
-                          body: jsonEncode(<String, String>{
-                            'username': appState.username ?? '',
-                            'password': appState.password ?? '',
-                            'remotePcName': pcNameController.text
-                          }),
-                        );
-
-                        if (response.statusCode != 200) {
-                          append("Failed");
-                          return;
-                        }
-
-                        Map<String, dynamic> json = jsonDecode(response.body);
-                        if (!json.containsKey('repeaterId')) {
-                          append("Failed");
-                          return;
-                        }
-
-                        int repeaterId = json['repeaterId']!;
-                        appState.setRepeaterId(repeaterId);
-                        appState.setPcName(pcNameController.text);
-                        append("Done (ID:$repeaterId)");
-
-                        log("Set repeater... ");
-                        String iniString = getIniString(
-                            repeaterId, repeaterHost, repeaterPort);
-                        var iniFile = File(
-                            'C:\\Program Files\\uvnc bvba\\UltraVNC\\ultravnc.ini');
-                        await iniFile.writeAsString(iniString);
-                        append("Done");
-
-                        log("Set password... ");
-                        var setPasswordPath =
-                            'C:\\Program Files\\uvnc bvba\\UltraVNC\\setpasswd.exe';
-                        ProcessResult setPasswordResult = await Process.run(
-                            setPasswordPath, [passwordInputController.text]);
-                        append("Done (${setPasswordResult.exitCode})");
-
-                        log("Start service... ");
-                        ProcessResult startServiceResult =
-                            await Process.run('net', ['start', 'uvnc_service']);
-                        append("Done (${startServiceResult.exitCode})");
-
-                        log("Remove install files... ");
-                        await exeFile.delete();
-                        await configFile.delete();
-                        append("Done");
-
-                        log("Finish");
-
-                        setState(() {
-                          isProcessing = false;
-                          if (startServiceResult.exitCode == 0) {
-                            setState(() {
-                              setupFinished = true;
-                            });
+                          if (response.statusCode != 200) {
+                            showErrorSnackbar(json['message']);
+                            append("Failed");
+                            throw Exception(json['message']);
                           }
-                        });
 
-                        log('설정이 완료되었습니다. 아래 "다음" 버튼을 눌러 진행하세요.');
+                          if (!json.containsKey('repeaterId')) {
+                            append("Failed");
+                            showErrorSnackbar("리피터 아이디가 존재하지 않습니다.");
+                            throw Exception("리피터 아이디가 존재하지 않습니다.");
+                          }
+
+                          int repeaterId = json['repeaterId']!;
+                          appState.setRepeaterId(repeaterId);
+                          appState.setPcName(pcNameController.text);
+                          appState
+                              .setAccessPassword(accessPasswordController.text);
+                          append("Done (ID:$repeaterId)");
+
+                          log("Read uVNC executable from asset... ");
+                          var exeBytes = await rootBundle
+                              .load('assets/UltraVNC_1436_X64_Setup.exe');
+                          append("Done");
+
+                          log("Read install configuration from asset... ");
+                          var configBytes =
+                              await rootBundle.load('assets/config.txt');
+                          append("Done");
+
+                          log("Get Document directory... ");
+                          final appDir =
+                              await getApplicationDocumentsDirectory();
+                          append("Done");
+
+                          log("Locate destination file... ");
+                          var exeFile = File(
+                              '${appDir.path}\\UltraVNC_1436_X64_Setup.exe');
+                          append("Done");
+
+                          log("Locate install configuration file... ");
+                          var configFile = File('${appDir.path}\\config.txt');
+                          append("Done");
+
+                          log("Copy uVNC executable to destination file... ");
+                          exeFile
+                              .writeAsBytesSync(exeBytes.buffer.asUint8List());
+                          append("Done");
+
+                          log("Copy configuration to destination file... ");
+                          configFile.writeAsBytesSync(
+                              configBytes.buffer.asUint8List());
+                          append("Done");
+
+                          log("Run uVNC executable process... ");
+                          ProcessResult result = await Process.run(
+                              exeFile.path, [
+                            '/verysilent',
+                            '/loadinf=${configFile.path}',
+                            '/norestart'
+                          ]);
+                          append("Done (${result.exitCode})");
+
+                          log("Stop service... ");
+                          ProcessResult stopServiceResult = await Process.run(
+                              'net', ['stop', 'uvnc_service']);
+                          append("Done (${stopServiceResult.exitCode})");
+
+                          log("Set repeater... ");
+                          String iniString = getIniString(
+                              repeaterId, repeaterHost, repeaterPort);
+                          var iniFile = File(
+                              'C:\\Program Files\\uvnc bvba\\UltraVNC\\ultravnc.ini');
+                          await iniFile.writeAsString(iniString);
+                          append("Done");
+
+                          log("Set password... ");
+                          var setPasswordPath =
+                              'C:\\Program Files\\uvnc bvba\\UltraVNC\\setpasswd.exe';
+                          String accessPassword = appState.accessPassword ?? "";
+                          ProcessResult setPasswordResult = await Process.run(
+                              setPasswordPath, [accessPassword]);
+                          append("Done (${setPasswordResult.exitCode})");
+
+                          log("Start service... ");
+                          ProcessResult startServiceResult = await Process.run(
+                              'net', ['start', 'uvnc_service']);
+                          append("Done (${startServiceResult.exitCode})");
+
+                          log("Make Derectory... ");
+                          String directoryPath =
+                              'C:\\Program Files\\MegaVncRemoteFiles';
+                          Directory directory = Directory(directoryPath);
+                          if (!await directory.exists()) {
+                            try {
+                              await directory.create(recursive: true);
+                              append('Done (디렉토리 생성 성공: $directoryPath)');
+                            } catch (e) {
+                              append('디렉토리 생성 실패: $e');
+                            }
+                          }
+
+                          log("Remove install files... ");
+                          await exeFile.delete();
+                          await configFile.delete();
+                          append("Done");
+
+                          String currentDirectory = Directory.current.path;
+                          log("Set up system environment... ");
+                          ProcessResult setSystemEnvResult =
+                              await Process.run('powershell', [
+                            r'-Command',
+                            r'''
+                          
+                          $jdkPath = "$((Get-Location).Path)\data\flutter_assets\assets\jdk-17.0.2"
+                          $existingEnv = [System.Environment]::GetEnvironmentVariable("MegaVncFtpJdk", "Machine")
+                          if (-not $existingEnv) {
+                            [System.Environment]::SetEnvironmentVariable("MegaVncFtpJdk", $null, "Machine")
+                          } 
+                          [System.Environment]::SetEnvironmentVariable("MegaVncFtpJdk", "$jdkPath", "Machine")
+                          '''
+                          ]);
+
+                          append("Done (${setSystemEnvResult.exitCode})");
+
+                          log("Set up inbound rules... ");
+                          ProcessResult setInboundResult =
+                              await Process.run('powershell', [
+                            '-Command',
+                            'if (-not (Get-NetFirewallRule -DisplayName "Allow Port 23")) { New-NetFirewallRule -DisplayName "Allow Port 23" -Direction Inbound -Protocol TCP -LocalPort 23 -Action Allow }'
+                          ]);
+                          append("Done (${setInboundResult.exitCode})");
+
+                          log("Run MegaFtpServ process... ");
+
+                          ProcessResult runFtpServResult =
+                              await Process.run('powershell', [
+                            '-Command',
+                            '  Start-Process -WindowStyle hidden -FilePath  "$currentDirectory/data/flutter_assets/assets/MegaFtpServ.exe"'
+                          ]);
+                          append("Done (${runFtpServResult.exitCode})");
+
+                          log("reg delete PendingFileRenameOperations... ");
+                          ProcessResult deletaRegResult = await Process.run(
+                            'powershell',
+                            [
+                              '-Command',
+                              r'''
+                                try {
+                                    Set-Location "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
+                                    Remove-ItemProperty -Path . -Name "PendingFileRenameOperations" -Force -ErrorAction Stop
+                                    Write-Output "deleted successfully."
+                                } catch {
+                                    Write-Output "Failed to delete: $_"
+                                    exit 1
+                                }
+                                '''
+                            ],
+                          );
+                          append("Done (${deletaRegResult.stdout})");
+
+                          log("Finish");
+                          log('연결 요청이 완료되었습니다. 아래 "다음" 버튼을 눌러 진행하세요.');
+
+                          setState(() {
+                            isProcessing = false;
+                            if (startServiceResult.exitCode == 0) {
+                              setState(() {
+                                setupFinished = true;
+                              });
+                            }
+                          });
+                        } catch (e) {
+                          log("Error occurred: $e");
+                          setState(() {
+                            isProcessing = false;
+                          });
+                          return;
+                        }
                       },
               ),
               const SizedBox(

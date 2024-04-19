@@ -40,7 +40,9 @@ dependencies:
   http: ^1.1.2
   path_provider: ^2.1.1
   package_info_plus: ^5.0.1
-
+  asset_fill: ^1.1.0
+ 
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -67,6 +69,94 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/
+    - assets/jdk-17.0.2/
+    - assets/jdk-17.0.2/bin/
+    - assets/jdk-17.0.2/bin/server/
+    - assets/jdk-17.0.2/conf/
+    - assets/jdk-17.0.2/conf/management/
+    - assets/jdk-17.0.2/conf/security/
+    - assets/jdk-17.0.2/conf/security/policy/
+    - assets/jdk-17.0.2/conf/security/policy/limited/
+    - assets/jdk-17.0.2/conf/security/policy/unlimited/
+    - assets/jdk-17.0.2/include/
+    - assets/jdk-17.0.2/include/win32/
+    - assets/jdk-17.0.2/include/win32/bridge/
+    - assets/jdk-17.0.2/jmods/
+    - assets/jdk-17.0.2/legal/
+    - assets/jdk-17.0.2/legal/java.base/
+    - assets/jdk-17.0.2/legal/java.compiler/
+    - assets/jdk-17.0.2/legal/java.datatransfer/
+    - assets/jdk-17.0.2/legal/java.desktop/
+    - assets/jdk-17.0.2/legal/java.instrument/
+    - assets/jdk-17.0.2/legal/java.logging/
+    - assets/jdk-17.0.2/legal/java.management/
+    - assets/jdk-17.0.2/legal/java.management.rmi/
+    - assets/jdk-17.0.2/legal/java.naming/
+    - assets/jdk-17.0.2/legal/java.net.http/
+    - assets/jdk-17.0.2/legal/java.prefs/
+    - assets/jdk-17.0.2/legal/java.rmi/
+    - assets/jdk-17.0.2/legal/java.scripting/
+    - assets/jdk-17.0.2/legal/java.se/
+    - assets/jdk-17.0.2/legal/java.security.jgss/
+    - assets/jdk-17.0.2/legal/java.security.sasl/
+    - assets/jdk-17.0.2/legal/java.smartcardio/
+    - assets/jdk-17.0.2/legal/java.sql/
+    - assets/jdk-17.0.2/legal/java.sql.rowset/
+    - assets/jdk-17.0.2/legal/java.transaction.xa/
+    - assets/jdk-17.0.2/legal/java.xml/
+    - assets/jdk-17.0.2/legal/java.xml.crypto/
+    - assets/jdk-17.0.2/legal/jdk.accessibility/
+    - assets/jdk-17.0.2/legal/jdk.attach/
+    - assets/jdk-17.0.2/legal/jdk.charsets/
+    - assets/jdk-17.0.2/legal/jdk.compiler/
+    - assets/jdk-17.0.2/legal/jdk.crypto.cryptoki/
+    - assets/jdk-17.0.2/legal/jdk.crypto.ec/
+    - assets/jdk-17.0.2/legal/jdk.crypto.mscapi/
+    - assets/jdk-17.0.2/legal/jdk.dynalink/
+    - assets/jdk-17.0.2/legal/jdk.editpad/
+    - assets/jdk-17.0.2/legal/jdk.hotspot.agent/
+    - assets/jdk-17.0.2/legal/jdk.httpserver/
+    - assets/jdk-17.0.2/legal/jdk.incubator.foreign/
+    - assets/jdk-17.0.2/legal/jdk.incubator.vector/
+    - assets/jdk-17.0.2/legal/jdk.internal.ed/
+    - assets/jdk-17.0.2/legal/jdk.internal.jvmstat/
+    - assets/jdk-17.0.2/legal/jdk.internal.le/
+    - assets/jdk-17.0.2/legal/jdk.internal.opt/
+    - assets/jdk-17.0.2/legal/jdk.internal.vm.ci/
+    - assets/jdk-17.0.2/legal/jdk.internal.vm.compiler/
+    - assets/jdk-17.0.2/legal/jdk.internal.vm.compiler.management/
+    - assets/jdk-17.0.2/legal/jdk.jartool/
+    - assets/jdk-17.0.2/legal/jdk.javadoc/
+    - assets/jdk-17.0.2/legal/jdk.jcmd/
+    - assets/jdk-17.0.2/legal/jdk.jconsole/
+    - assets/jdk-17.0.2/legal/jdk.jdeps/
+    - assets/jdk-17.0.2/legal/jdk.jdi/
+    - assets/jdk-17.0.2/legal/jdk.jdwp.agent/
+    - assets/jdk-17.0.2/legal/jdk.jfr/
+    - assets/jdk-17.0.2/legal/jdk.jlink/
+    - assets/jdk-17.0.2/legal/jdk.jpackage/
+    - assets/jdk-17.0.2/legal/jdk.jshell/
+    - assets/jdk-17.0.2/legal/jdk.jsobject/
+    - assets/jdk-17.0.2/legal/jdk.jstatd/
+    - assets/jdk-17.0.2/legal/jdk.localedata/
+    - assets/jdk-17.0.2/legal/jdk.management/
+    - assets/jdk-17.0.2/legal/jdk.management.agent/
+    - assets/jdk-17.0.2/legal/jdk.management.jfr/
+    - assets/jdk-17.0.2/legal/jdk.naming.dns/
+    - assets/jdk-17.0.2/legal/jdk.naming.rmi/
+    - assets/jdk-17.0.2/legal/jdk.net/
+    - assets/jdk-17.0.2/legal/jdk.nio.mapmode/
+    - assets/jdk-17.0.2/legal/jdk.random/
+    - assets/jdk-17.0.2/legal/jdk.sctp/
+    - assets/jdk-17.0.2/legal/jdk.security.auth/
+    - assets/jdk-17.0.2/legal/jdk.security.jgss/
+    - assets/jdk-17.0.2/legal/jdk.unsupported/
+    - assets/jdk-17.0.2/legal/jdk.unsupported.desktop/
+    - assets/jdk-17.0.2/legal/jdk.xml.dom/
+    - assets/jdk-17.0.2/legal/jdk.zipfs/
+    - assets/jdk-17.0.2/lib/
+    - assets/jdk-17.0.2/lib/jfr/
+    - assets/jdk-17.0.2/lib/security/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
