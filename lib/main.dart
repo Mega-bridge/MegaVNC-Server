@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:megavnc_server/config.dart';
 import 'package:megavnc_server/http_override.dart';
 import 'package:megavnc_server/uvnc_ini.dart';
-import 'package:path_provider/path_provider.dart';
+//import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -175,29 +175,22 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   Widget build(BuildContext context) {
     var isInputEnabled = !isProcessing && !setupFinished;
     final appState = Provider.of<MyAppState>(context);
-    // void copyDirectorySync(String sourcePath, String destinationPath) {
-    //   // 원본 디렉토리를 엽니다.
-    //   final sourceDir = Directory(sourcePath);
+    void copyDirectorySync(String sourcePath, String destinationPath) {
+      final sourceDir = Directory(sourcePath);
 
-    //   // 대상 디렉토리를 생성합니다.
-    //   Directory(destinationPath).createSync(recursive: true);
-
-    //   // 원본 디렉토리의 파일과 하위 디렉토리를 가져와서 반복합니다.
-    //   for (final entity in sourceDir.listSync(recursive: true)) {
-    //     // 파일인 경우 복사합니다.
-    //     if (entity is File) {
-    //       final newFile =
-    //           File('${destinationPath}\\${entity.path.split('\\').last}');
-    //       newFile.writeAsBytesSync(entity.readAsBytesSync());
-    //     }
-    //     // 디렉토리인 경우 재귀적으로 복사합니다.
-    //     else if (entity is Directory) {
-    //       final newDir =
-    //           Directory('${destinationPath}\\${entity.path.split('\\').last}');
-    //       copyDirectorySync(entity.path, newDir.path);
-    //     }
-    //   }
-    // }
+      Directory(destinationPath).createSync(recursive: true);
+      for (final entity in sourceDir.listSync(recursive: true)) {
+        if (entity is File) {
+          final newFile =
+              File('${destinationPath}\\${entity.path.split('\\').last}');
+          newFile.writeAsBytesSync(entity.readAsBytesSync());
+        } else if (entity is Directory) {
+          final newDir =
+              Directory('${destinationPath}\\${entity.path.split('\\').last}');
+          copyDirectorySync(entity.path, newDir.path);
+        }
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -355,6 +348,17 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                               .setAccessPassword(accessPasswordController.text);
                           append("Done (ID:$repeaterId)");
 
+//programfiles에 MegaVnc 디렉토리 생성
+                          log("Make program Derectory... ");
+                          String programDirectoryPath =
+                              'C:\\Program Files\\MegaVnc';
+                          Directory programDirectory =
+                              Directory(programDirectoryPath);
+                          if (!await programDirectory.exists()) {
+                            await programDirectory.create(recursive: true);
+                            append('Done ($programDirectoryPath)');
+                          }
+
                           log("Read uVNC executable from asset... ");
                           var exeBytes = await rootBundle
                               .load('assets/UltraVNC_1436_X64_Setup.exe');
@@ -365,30 +369,84 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                               await rootBundle.load('assets/config.txt');
                           append("Done");
 
-                          log("Get Document directory... ");
-                          final appDir =
-                              await getApplicationDocumentsDirectory();
+//ftpserver, ftp config 바이트로 변환
+
+                          log("Read MegaFtpServ from asset... ");
+                          var MegaFtpServBytes =
+                              await rootBundle.load('assets/MegaFtpServ.exe');
+                          append("Done");
+
+                          log("Read ftpConfig from asset... ");
+                          var ftpConfigBytes = await rootBundle
+                              .load('assets/ftp-config.properties');
                           append("Done");
 
                           log("Locate destination file... ");
                           var exeFile = File(
-                              '${appDir.path}\\UltraVNC_1436_X64_Setup.exe');
+                              '${programDirectory.path}\\UltraVNC_1436_X64_Setup.exe');
                           append("Done");
 
                           log("Locate install configuration file... ");
-                          var configFile = File('${appDir.path}\\config.txt');
+                          var configFile =
+                              File('${programDirectory.path}\\config.txt');
+                          append("Done");
+
+//ftpserver, ftp config asset에서 위치 설정 위치는 위에서 만든 디렉토리로 변환
+
+                          log("Locate MegaFtpServer file... ");
+                          var MegaFtpServFile =
+                              File('${programDirectory.path}\\MegaFtpServ.exe');
+                          append("Done");
+
+                          log("Locate ftpConfig file... ");
+                          var ftpConfigFile = File(
+                              '${programDirectory.path}\\ftp-config.properties');
                           append("Done");
 
                           log("Copy uVNC executable to destination file... ");
+                          if (exeFile.existsSync()) {
+                            await exeFile.delete();
+                          }
                           exeFile
                               .writeAsBytesSync(exeBytes.buffer.asUint8List());
                           append("Done");
 
                           log("Copy configuration to destination file... ");
+                          if (configFile.existsSync()) {
+                            await configFile.delete();
+                          }
                           configFile.writeAsBytesSync(
                               configBytes.buffer.asUint8List());
                           append("Done");
 
+//ftpserver, ftp config 복사 이미 존재 하면 삭제하고 복사
+
+                          log("Copy MegaFtpServ to destination file... ");
+                          if (MegaFtpServFile.existsSync()) {
+                            await MegaFtpServFile.delete();
+                          }
+                          MegaFtpServFile.writeAsBytesSync(
+                              MegaFtpServBytes.buffer.asUint8List());
+                          append("Done");
+
+                          log("Copy ftpConfig to destination file... ");
+                          if (ftpConfigFile.existsSync()) {
+                            await ftpConfigFile.delete();
+                          }
+                          ftpConfigFile.writeAsBytesSync(
+                              ftpConfigBytes.buffer.asUint8List());
+                          append("Done");
+
+//jdk 복사
+                          log("Copy jdk-17.0.2 to destination file... ");
+                          String currentDirectory = Directory.current.path;
+                          if (!File('${programDirectory.path}\\jdk-17.0.2')
+                              .existsSync()) {
+                            copyDirectorySync(currentDirectory,
+                                '${programDirectory.path}\\jdk-17.0.2');
+                          }
+
+                          append("Done");
                           log("Run uVNC executable process... ");
                           ProcessResult result = await Process.run(
                               exeFile.path, [
@@ -396,12 +454,12 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                             '/loadinf=${configFile.path}',
                             '/norestart'
                           ]);
-                          append("Done (${result.exitCode})");
+                          append("Done (${result.stdout})");
 
                           log("Stop service... ");
                           ProcessResult stopServiceResult = await Process.run(
                               'net', ['stop', 'uvnc_service']);
-                          append("Done (${stopServiceResult.exitCode})");
+                          append("Done (${stopServiceResult.stdout})");
 
                           log("Set repeater... ");
                           String iniString = getIniString(
@@ -417,48 +475,36 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           String accessPassword = appState.accessPassword ?? "";
                           ProcessResult setPasswordResult = await Process.run(
                               setPasswordPath, [accessPassword]);
-                          append("Done (${setPasswordResult.exitCode})");
+                          append("Done (${setPasswordResult.stdout})");
 
                           log("Start service... ");
                           ProcessResult startServiceResult = await Process.run(
                               'net', ['start', 'uvnc_service']);
-                          append("Done (${startServiceResult.exitCode})");
+                          append("Done (${startServiceResult.stdout})");
 
                           log("Make Derectory... ");
                           String directoryPath =
                               'C:\\Program Files\\MegaVncRemoteFiles';
                           Directory directory = Directory(directoryPath);
                           if (!await directory.exists()) {
-                            try {
-                              await directory.create(recursive: true);
-                              append('Done (디렉토리 생성 성공: $directoryPath)');
-                            } catch (e) {
-                              append('디렉토리 생성 실패: $e');
-                            }
+                            await directory.create(recursive: true);
+                            append('Done ($directoryPath)');
                           }
+//삭제로직 없애기
 
-                          log("Remove install files... ");
-                          await exeFile.delete();
-                          await configFile.delete();
-                          append("Done");
-
-                          String currentDirectory = Directory.current.path;
                           log("Set up system environment... ");
+
                           ProcessResult setSystemEnvResult =
                               await Process.run('powershell', [
-                            r'-Command',
+                            '-Command',
                             r'''
-                          
-                          $jdkPath = "$((Get-Location).Path)\data\flutter_assets\assets\jdk-17.0.2"
                           $existingEnv = [System.Environment]::GetEnvironmentVariable("MegaVncFtpJdk", "Machine")
                           if (-not $existingEnv) {
                             [System.Environment]::SetEnvironmentVariable("MegaVncFtpJdk", $null, "Machine")
-                          } 
-                          [System.Environment]::SetEnvironmentVariable("MegaVncFtpJdk", "$jdkPath", "Machine")
-                          '''
+                          }   ''',
+                            ' [System.Environment]::SetEnvironmentVariable("MegaVncFtpJdk", "$programDirectoryPath\\jdk-17.0.2", "Machine")'
                           ]);
-
-                          append("Done (${setSystemEnvResult.exitCode})");
+                          append("Done (${setSystemEnvResult.stdout})");
 
                           log("Set up inbound rules... ");
                           ProcessResult setInboundResult =
@@ -466,16 +512,18 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                             '-Command',
                             'if (-not (Get-NetFirewallRule -DisplayName "Allow Port 23")) { New-NetFirewallRule -DisplayName "Allow Port 23" -Direction Inbound -Protocol TCP -LocalPort 23 -Action Allow }'
                           ]);
-                          append("Done (${setInboundResult.exitCode})");
+                          append("Done (${setInboundResult.stdout})");
 
                           log("Run MegaFtpServ process... ");
+
+//programfiles 에서 실행
 
                           ProcessResult runFtpServResult =
                               await Process.run('powershell', [
                             '-Command',
-                            '  Start-Process -WindowStyle hidden -FilePath  "$currentDirectory/data/flutter_assets/assets/MegaFtpServ.exe"'
+                            '  Start-Process -WindowStyle hidden -FilePath  "$programDirectoryPath\\MegaFtpServ.exe"'
                           ]);
-                          append("Done (${runFtpServResult.exitCode})");
+                          append("Done (${runFtpServResult.stdout})");
 
                           log("reg delete PendingFileRenameOperations... ");
                           ProcessResult deletaRegResult = await Process.run(
