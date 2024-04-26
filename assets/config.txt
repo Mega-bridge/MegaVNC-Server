@@ -6,3 +6,7 @@ NoIcons=0
 SetupType=server
 Components=ultravnc_server
 Tasks=installservice
+[reconnect]
+reconnectId=default
+pcName=null
+groupName=null

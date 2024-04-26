@@ -8,8 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:megavnc_server/config.dart';
 import 'package:megavnc_server/http_override.dart';
 import 'package:megavnc_server/uvnc_ini.dart';
-//import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import 'package:window_manager/window_manager.dart';
 
 class ResponseGroupApiDto {
@@ -50,6 +50,7 @@ class MyAppState extends ChangeNotifier {
   int? repeaterId;
   String? pcName;
   String? accessPassword;
+  String? reconnectId;
   List<ResponseGroupApiDto> _groups = [];
   List<ResponseGroupApiDto> get groups => _groups;
 
@@ -63,6 +64,10 @@ class MyAppState extends ChangeNotifier {
 
   void setAccessPassword(String accessPassword) {
     this.accessPassword = accessPassword;
+  }
+
+  void setReconnectId(String reconnectId) {
+    this.reconnectId = reconnectId;
   }
 }
 
@@ -101,7 +106,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   var setupFinished = false;
   late Future<String> ipAdress;
   ResponseGroupApiDto? _selectedGroup;
-
   late Future<List<ResponseGroupApiDto>> fetchGroupsFuture;
 
   void log(String message) {
@@ -175,9 +179,53 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   Widget build(BuildContext context) {
     var isInputEnabled = !isProcessing && !setupFinished;
     final appState = Provider.of<MyAppState>(context);
+
+    Map<String, dynamic> parseConfig(String configContent) {
+      Map<String, dynamic> configMap = {};
+      List<String> lines = LineSplitter().convert(configContent);
+      String? section;
+      for (String line in lines) {
+        if (line.startsWith('[') && line.endsWith(']')) {
+          section = line.substring(1, line.length - 1);
+          configMap[section] = {};
+        } else {
+          List<String> parts = line.split('=');
+          configMap[section][parts[0]] = parts[1];
+        }
+      }
+
+      return configMap;
+    }
+
+    void writeConfigFile(
+        Map<String, dynamic> configMap, String filePath) async {
+      IOSink? sink;
+      try {
+        final file = File(filePath);
+
+        if (await file.exists()) {
+          await file.delete();
+        }
+
+        await file.create(recursive: true);
+
+        sink = file.openWrite(mode: FileMode.writeOnly);
+
+        configMap.forEach((section, values) {
+          sink!.writeln('[$section]');
+          values.forEach((key, value) {
+            sink!.writeln('$key=$value');
+          });
+        });
+        await sink.close();
+      } catch (e) {
+        // 오류가 발생한 경우 처리합니다.
+        log('Error writing config file: $e');
+      }
+    }
+
     void copyDirectorySync(String sourcePath, String destinationPath) {
       final sourceDir = Directory(sourcePath);
-
       Directory(destinationPath).createSync(recursive: true);
       for (final entity in sourceDir.listSync(recursive: true)) {
         if (entity is File) {
@@ -309,21 +357,50 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                         output.clear();
                         try {
                           log("Start");
+//Todo: 이 부분을 futureBuilder로 미리 하고 빌드 하고 appstate에 저장한 후에 입력 부분에서 사용
+                          String filePath =
+                              'data/flutter_assets/assets/config.txt';
+                          Map<String, dynamic> config =
+                              parseConfig(await File(filePath).readAsString());
+                          appState.setReconnectId(
+                              config['reconnect']['reconnectId'] ?? ' ');
+
+//config.txt에서 reconnectId가 null이면 랜덤uuid인 reconnectId 생성 후 config에 저장, 변수에 담기
+//config.txt에서 reconnectId 가 null이 아니면 config에 저장된 uuid 변수에 담기
+
+                          if (appState.reconnectId == 'default') {
+                            log("Generate ReconnectId... ");
+                            appState.setReconnectId(Uuid().v4());
+                            config['reconnect']['reconnectId'] =
+                                appState.reconnectId;
+                            append("Done");
+                          }
+                          //config에 PCname, group 을 저장하기
+                          log("reset config... ");
+                          config['reconnect']['pcName'] = pcNameController.text;
+
+                          config['reconnect']['groupName'] =
+                              _selectedGroup?.groupName ?? 'null';
+
+                          writeConfigFile(config, filePath);
+                          append("Done");
 
                           log("Request repeater ID... ");
                           String ipadress = await ipAdress;
-
                           http.Response response = await http.post(
                             Uri.parse(
                                 "https://$apiHost:$apiPort/api/remote-pcs"),
                             headers: <String, String>{
                               'Content-Type': 'application/json; charset=UTF-8',
                             },
+// 위의 uuid 추가해서 전송
+
                             body: jsonEncode(<String, String>{
                               'groupName': _selectedGroup?.groupName ?? '',
                               'accessPassword': accessPasswordController.text,
                               'pcName': pcNameController.text,
-                              'ftpHost': ipadress
+                              'ftpHost': ipadress,
+                              'reconnectId': appState.reconnectId ?? ''
                             }),
                           );
                           Map<String, dynamic> json =
@@ -348,7 +425,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                               .setAccessPassword(accessPasswordController.text);
                           append("Done (ID:$repeaterId)");
 
-//programfiles에 MegaVnc 디렉토리 생성
                           log("Make program Derectory... ");
                           String programDirectoryPath =
                               'C:\\Program Files\\MegaVnc';
@@ -369,8 +445,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                               await rootBundle.load('assets/config.txt');
                           append("Done");
 
-//ftpserver, ftp config 바이트로 변환
-
                           log("Read MegaFtpServ from asset... ");
                           var MegaFtpServBytes =
                               await rootBundle.load('assets/MegaFtpServ.exe');
@@ -390,8 +464,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           var configFile =
                               File('${programDirectory.path}\\config.txt');
                           append("Done");
-
-//ftpserver, ftp config asset에서 위치 설정 위치는 위에서 만든 디렉토리로 변환
 
                           log("Locate MegaFtpServer file... ");
                           var MegaFtpServFile =
@@ -419,7 +491,10 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                               configBytes.buffer.asUint8List());
                           append("Done");
 
-//ftpserver, ftp config 복사 이미 존재 하면 삭제하고 복사
+                          log("Stop Previous MegaFtpServ process... ");
+                          ProcessResult stopFtpServResult = await Process.run(
+                              'taskkill', ['/F', '/IM', 'java.exe']);
+                          append("Done(${stopFtpServResult.stderr})");
 
                           log("Copy MegaFtpServ to destination file... ");
                           if (MegaFtpServFile.existsSync()) {
@@ -437,7 +512,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                               ftpConfigBytes.buffer.asUint8List());
                           append("Done");
 
-//jdk 복사
                           log("Copy jdk-17.0.2 to destination file... ");
                           String currentDirectory = Directory.current.path;
                           if (!File('${programDirectory.path}\\jdk-17.0.2')
@@ -490,7 +564,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                             await directory.create(recursive: true);
                             append('Done ($directoryPath)');
                           }
-//삭제로직 없애기
 
                           log("Set up system environment... ");
 
@@ -514,14 +587,13 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           ]);
                           append("Done (${setInboundResult.stdout})");
 
+//todo:이미 ftp 서버가 실행되고 있으면 종료시키고 실행
+
                           log("Run MegaFtpServ process... ");
-
-//programfiles 에서 실행
-
                           ProcessResult runFtpServResult =
                               await Process.run('powershell', [
                             '-Command',
-                            '  Start-Process -WindowStyle hidden -FilePath  "$programDirectoryPath\\MegaFtpServ.exe"'
+                            'Start-Process -WindowStyle hidden -FilePath  "$programDirectoryPath\\MegaFtpServ.exe"'
                           ]);
                           append("Done (${runFtpServResult.stdout})");
 
