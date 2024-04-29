@@ -104,9 +104,35 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
   var accessPasswordController = TextEditingController();
   var isProcessing = false;
   var setupFinished = false;
+  var pcName = "";
+  var status = "OFFLINE";
+  var isStatusLoading = false;
+  var isDisconnectLoading = false;
   late Future<String> ipAdress;
   ResponseGroupApiDto? _selectedGroup;
   late Future<List<ResponseGroupApiDto>> fetchGroupsFuture;
+  void disconnect(String reconnectId) async {
+    setState(() {
+      isDisconnectLoading = true;
+    });
+    //uvnc 서비스 종료
+    await Process.run('net', ['stop', 'uvnc_service']);
+    //ftp 서비스 종료
+    await Process.run('taskkill', ['/F', '/IM', 'java.exe']);
+    //인바운드 삭제
+    await Process.run('powershell',
+        ['-Command', 'Remove-NetFirewallRule -DisplayName "Allow Port 23"']);
+    //웹서버 연결 해제 api
+    await http.delete(
+        Uri.parse('https://$apiHost:$apiPort/api/remote-pcs/$reconnectId'));
+    //config.txt 에서 pcName, group 초기화
+    setState(() {
+      isDisconnectLoading = false;
+      isProcessing = false;
+      setupFinished = false;
+      output.clear(); // 출력 큐 지우기
+    });
+  }
 
   void log(String message) {
     setState(() {
@@ -219,7 +245,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
         });
         await sink.close();
       } catch (e) {
-        // 오류가 발생한 경우 처리합니다.
         log('Error writing config file: $e');
       }
     }
@@ -341,7 +366,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           )),
                         ),
                       )
-                    : const SizedBox(),
+                    : const Icon(Icons.link),
                 label: const Text('연결'),
                 onPressed: isProcessing
                     ? null
@@ -357,16 +382,15 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                         output.clear();
                         try {
                           log("Start");
-//Todo: 이 부분을 futureBuilder로 미리 하고 빌드 하고 appstate에 저장한 후에 입력 부분에서 사용
+
                           String filePath =
                               'data/flutter_assets/assets/config.txt';
+                          //로컬
+                          // String filePath = 'assets/config.txt';
                           Map<String, dynamic> config =
                               parseConfig(await File(filePath).readAsString());
                           appState.setReconnectId(
                               config['reconnect']['reconnectId'] ?? ' ');
-
-//config.txt에서 reconnectId가 null이면 랜덤uuid인 reconnectId 생성 후 config에 저장, 변수에 담기
-//config.txt에서 reconnectId 가 null이 아니면 config에 저장된 uuid 변수에 담기
 
                           if (appState.reconnectId == 'default') {
                             log("Generate ReconnectId... ");
@@ -375,7 +399,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                                 appState.reconnectId;
                             append("Done");
                           }
-                          //config에 PCname, group 을 저장하기
+
                           log("reset config... ");
                           config['reconnect']['pcName'] = pcNameController.text;
 
@@ -393,8 +417,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                             headers: <String, String>{
                               'Content-Type': 'application/json; charset=UTF-8',
                             },
-// 위의 uuid 추가해서 전송
-
                             body: jsonEncode(<String, String>{
                               'groupName': _selectedGroup?.groupName ?? '',
                               'accessPassword': accessPasswordController.text,
@@ -513,10 +535,13 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           append("Done");
 
                           log("Copy jdk-17.0.2 to destination file... ");
-                          String currentDirectory = Directory.current.path;
+
                           if (!File('${programDirectory.path}\\jdk-17.0.2')
                               .existsSync()) {
-                            copyDirectorySync(currentDirectory,
+                            copyDirectorySync(
+                                'data\\flutter_assets\\assets\\jdk-17.0.2',
+                                //로컬
+                                // assets\\jdk-17.0.2',
                                 '${programDirectory.path}\\jdk-17.0.2');
                           }
 
@@ -528,12 +553,12 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                             '/loadinf=${configFile.path}',
                             '/norestart'
                           ]);
-                          append("Done (${result.stdout})");
+                          append("Done (${result.exitCode})");
 
                           log("Stop service... ");
                           ProcessResult stopServiceResult = await Process.run(
                               'net', ['stop', 'uvnc_service']);
-                          append("Done (${stopServiceResult.stdout})");
+                          append("Done (${stopServiceResult.exitCode})");
 
                           log("Set repeater... ");
                           String iniString = getIniString(
@@ -585,9 +610,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                             '-Command',
                             'if (-not (Get-NetFirewallRule -DisplayName "Allow Port 23")) { New-NetFirewallRule -DisplayName "Allow Port 23" -Direction Inbound -Protocol TCP -LocalPort 23 -Action Allow }'
                           ]);
-                          append("Done (${setInboundResult.stdout})");
-
-//todo:이미 ftp 서버가 실행되고 있으면 종료시키고 실행
+                          append("Done (${setInboundResult.exitCode})");
 
                           log("Run MegaFtpServ process... ");
                           ProcessResult runFtpServResult =
@@ -617,7 +640,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           append("Done (${deletaRegResult.stdout})");
 
                           log("Finish");
-                          log('연결 요청이 완료되었습니다. 아래 "다음" 버튼을 눌러 진행하세요.');
 
                           setState(() {
                             isProcessing = false;
@@ -654,139 +676,126 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
               const SizedBox(
                 height: 20,
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              const Row(
                 children: [
-                  FilledButton(
-                      onPressed: setupFinished
-                          ? () {
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ConnectionCheckPage()));
-                            }
-                          : null,
-                      child: const Text('다음'))
+                  Text('3. 아래 "연결 확인" 버튼을 눌러 서버가 정상적으로 설치되었는지 확인하세요.'),
                 ],
-              )
+              ),
+              const Row(
+                children: [
+                  Text('(상태 업데이트에 30초 정도 시간이 걸릴 수 있습니다.)'),
+                ],
+              ),
+              const SizedBox(
+                height: 20,
+              ),
+              ElevatedButton.icon(
+                icon: isStatusLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Center(
+                              child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                          )),
+                        ),
+                      )
+                    : const Icon(Icons.refresh),
+                label: const Text('연결 확인'),
+                onPressed: () async {
+                  setState(() {
+                    isStatusLoading = true;
+                  });
+                  http
+                      .get(Uri.parse(
+                          'https://$apiHost:$apiPort/api/remote-pcs/${appState.repeaterId}'))
+                      .then((res) {
+                    if (res.statusCode == 200) {
+                      Map<String, dynamic> json = jsonDecode(res.body);
+                      setState(() {
+                        status = json['status'];
+                      });
+                    } else {
+                      setState(() {
+                        status = res.statusCode.toString();
+                      });
+                    }
+                    setState(() {
+                      isStatusLoading = false;
+                    });
+                  });
+                },
+              ),
+              const SizedBox(
+                height: 20.0,
+              ),
+              Row(
+                children: [
+                  Text('현재 상태: '),
+                  switch (status) {
+                    "OFFLINE" =>
+                      const Text('오프라인', style: TextStyle(color: Colors.grey)),
+                    "STANDBY" =>
+                      const Text('대기중', style: TextStyle(color: Colors.green)),
+                    "ACTIVE" => const Text('사용중',
+                        style: TextStyle(color: Colors.lightBlueAccent)),
+                    _ =>
+                      const Text('error', style: TextStyle(color: Colors.red))
+                  }
+                ],
+              ),
+              const SizedBox(
+                height: 20.0,
+              ),
+              const Row(
+                children: [
+                  Text('4. 아래 "연결 해제" 버튼을 눌러 안전하게 연결을 종료하세요.'),
+                ],
+              ),
+              const Row(
+                children: [
+                  Text('(연결을 해제하지 않으면 프로그램을 종료하여도 외부에서 pc에 접근 가능합니다.)'),
+                ],
+              ),
+              const SizedBox(
+                height: 20.0,
+              ),
+              ElevatedButton.icon(
+                icon: isDisconnectLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Center(
+                              child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                          )),
+                        ),
+                      )
+                    : const Icon(Icons.link_off),
+                label: const Text('연결 해제'),
+                onPressed: isProcessing
+                    ? null
+                    : () async {
+                        String filePath =
+                            'data/flutter_assets/assets/config.txt';
+                        //로컬
+                        // String filePath = 'assets/config.txt';
+                        Map<String, dynamic> config =
+                            parseConfig(await File(filePath).readAsString());
+                        log(config['reconnect']['reconnectId'] =
+                            appState.reconnectId ?? "asd");
+                        disconnect(config['reconnect']['reconnectId'] =
+                            appState.reconnectId ?? "asd");
+                      },
+              ),
             ],
           ),
         ),
       ),
     );
-  }
-}
-
-class ConnectionCheckPage extends StatefulWidget {
-  const ConnectionCheckPage({super.key});
-
-  @override
-  State<ConnectionCheckPage> createState() => _ConnectionCheckPageState();
-}
-
-class _ConnectionCheckPageState extends State<ConnectionCheckPage> {
-  var pcName = "";
-  var status = "OFFLINE";
-  var isLoading = false;
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-
-    return Scaffold(
-        appBar: AppBar(
-          foregroundColor: Theme.of(context).colorScheme.onPrimary,
-          title: const Text('연결 확인'),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-        ),
-        body: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Center(
-            child: Column(
-              children: [
-                const Row(
-                  children: [
-                    Text('아래 "연결 확인" 버튼을 눌러 서버가 정상적으로 설치되었는지 확인하세요.'),
-                  ],
-                ),
-                const Row(
-                  children: [
-                    Text('(상태 업데이트에 30초 정도 시간이 걸릴 수 있습니다.)'),
-                  ],
-                ),
-                const SizedBox(
-                  height: 20,
-                ),
-                ElevatedButton.icon(
-                  icon: isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: Center(
-                                child: CircularProgressIndicator(
-                              strokeWidth: 3,
-                            )),
-                          ),
-                        )
-                      : const Icon(Icons.refresh),
-                  label: const Text('연결 확인'),
-                  onPressed: isLoading
-                      ? null
-                      : () async {
-                          setState(() {
-                            isLoading = true;
-                          });
-                          http
-                              .get(Uri.parse(
-                                  'https://$apiHost:$apiPort/api/remote-pcs/${appState.repeaterId}'))
-                              .then((res) {
-                            if (res.statusCode == 200) {
-                              Map<String, dynamic> json = jsonDecode(res.body);
-                              setState(() {
-                                status = json['status'];
-                              });
-                            } else {
-                              setState(() {
-                                status = res.statusCode.toString();
-                              });
-                            }
-                            setState(() {
-                              isLoading = false;
-                            });
-                          });
-                        },
-                ),
-                const SizedBox(
-                  height: 20.0,
-                ),
-                Row(
-                  children: [
-                    Text('${appState.pcName}의 현재 상태: '),
-                    switch (status) {
-                      "OFFLINE" => const Text('오프라인'),
-                      "STANDBY" => const Text('연결됨 (대기중)'),
-                      "ACTIVE" => const Text('연결됨 (사용중)'),
-                      _ => const Text('error')
-                    }
-                  ],
-                ),
-                const Expanded(child: SizedBox()),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    FilledButton(
-                        onPressed: () {
-                          exit(0);
-                        },
-                        child: const Text('완료'))
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ));
   }
 }
