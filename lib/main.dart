@@ -9,6 +9,7 @@ import 'package:megavnc_server/config.dart';
 import 'package:megavnc_server/http_override.dart';
 import 'package:megavnc_server/uvnc_ini.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -265,6 +266,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
     setState(() {
       isDisconnectLoading = true;
     });
+
     try {
       String reconnectId = config['reconnect']['reconnectId'];
       final response = await http.delete(
@@ -284,6 +286,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
           r'Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "ClipboardReader"'
         ]);
         showSuccessSnackbar('연결이 성공적으로 해제되었습니다.');
+        status = "OFFLINE";
       } else {
         final Map<String, dynamic> errorJson =
             jsonDecode(utf8.decode(response.bodyBytes));
@@ -759,8 +762,29 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           style: TextStyle(color: Colors.grey)),
                       "STANDBY" => const Text('대기중',
                           style: TextStyle(color: Colors.green)),
-                      "ACTIVE" => const Text('사용중',
-                          style: TextStyle(color: Colors.lightBlueAccent)),
+                      "ACTIVE" => Row(
+                        children: [
+                          const Text('사용중',
+                              style: TextStyle(color: Colors.lightBlueAccent)),
+                          const SizedBox(width: 8), // 버튼과 텍스트 사이의 간격을 추가
+                          ElevatedButton(
+                            onPressed: () async {
+                              Map<String, dynamic> config =
+                              parseConfig(await File(filePath).readAsString());
+                              String reconnectId = config['reconnect']['reconnectId'];
+
+                              final Uri url = Uri.parse('https://vnc.megabridge.co.kr:8443/files/download?reconnectId=$reconnectId');
+
+                              if (await canLaunchUrl(url)) {
+                                await launchUrl(url);
+                              } else {
+                                throw 'Could not launch $url';
+                              }
+                            },
+                            child: const Text('파일 다운로드'),
+                          ),
+                        ],
+                      ),
                       _ =>
                         const Text('error', style: TextStyle(color: Colors.red))
                     }
