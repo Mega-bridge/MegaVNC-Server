@@ -1,13 +1,12 @@
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:io';
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:megavnc_server/config.dart';
 import 'package:megavnc_server/http_override.dart';
-import 'package:megavnc_server/uvnc_ini.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -24,6 +23,16 @@ class ResponseGroupApiDto {
       groupId: json['groupId'],
       groupName: json['groupName'],
     );
+  }
+}
+
+Future<bool> checkPortOpen(String host, int port) async {
+  try {
+    final socket = await Socket.connect(host, port, timeout: Duration(seconds: 5));
+    socket.destroy();
+    return true;
+  } catch (e) {
+    return false;
   }
 }
 
@@ -49,6 +58,7 @@ void main() async {
 
 class MyAppState extends ChangeNotifier {
   int? repeaterId;
+  int? secondaryRepeaterId;
   String? pcName;
   String? accessPassword;
   String? reconnectId;
@@ -57,6 +67,10 @@ class MyAppState extends ChangeNotifier {
 
   void setRepeaterId(int repeaterId) {
     this.repeaterId = repeaterId;
+  }
+
+    void setSecondaryRepeaterId(int secondaryRepeaterId) {
+    this.secondaryRepeaterId = secondaryRepeaterId;
   }
 
   void setPcName(String pcName) {
@@ -271,7 +285,9 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
       String reconnectId = config['reconnect']['reconnectId'];
       final response = await http.delete(
           Uri.parse('https://$apiHost:$apiPort/api/remote-pcs/$reconnectId'));
-      await Process.run('net', ['stop', 'uvnc_service']);
+
+        await Process.run('taskkill', ['/F', '/IM', 'winvnc.exe']);
+
       if (response.statusCode == 200) {
         
         config['reconnect']['pcName'] = 'default';
@@ -279,12 +295,8 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
         config['reconnect']['repeaterId'] = 'default';
         writeConfigFile(config);
 
-        await Process.run('taskkill', ['/F', '/IM', 'ClipboardReader.exe']);
 
-        await Process.run('powershell', [
-          '-Command',
-          r'Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "ClipboardReader"'
-        ]);
+
         showSuccessSnackbar('연결이 성공적으로 해제되었습니다.');
         status = "OFFLINE";
       } else {
@@ -507,19 +519,23 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                             throw Exception("리피터 아이디가 존재하지 않습니다.");
                           }
 
+                          
+                          if (!json.containsKey('secondaryRepeaterId')) {
+                            append("Failed");
+                            showErrorSnackbar("예비 리피터 아이디가 존재하지 않습니다.");
+                            throw Exception("예비 리피터 아이디가 존재하지 않습니다.");
+                          }
+
                           int repeaterId = json['repeaterId']!;
+                          int secondaryRepeaterId = json['secondaryRepeaterId']!;
                           appState.setRepeaterId(repeaterId);
+                          appState.setSecondaryRepeaterId(secondaryRepeaterId);
                           appState.setPcName(pcNameController.text);
                           appState
                               .setAccessPassword(accessPasswordController.text);
 
                           append("Done (ID:$repeaterId)");
 
-                          log("Stop ClipboardReader... ");
-                          ProcessResult ClipboardReaderResult =
-                              await Process.run('taskkill',
-                                  ['/F', '/IM', 'ClipboardReader.exe']);
-                          append("Done (${ClipboardReaderResult.exitCode})");
 
                           log("reset config... ");
                           config['reconnect']['pcName'] = pcNameController.text;
@@ -537,23 +553,13 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                               .load('assets/UltraVNC_1436_X64_Setup.exe');
                           append("Done");
 
-                     
-
-                          log("Read ClipboardReader executable from asset... ");
-                          var ClipboardReaderExeBytes = await rootBundle
-                              .load('assets/ClipboardReader.exe');
-                          append("Done");
-
+                    
                           log("Locate destination file... ");
                           var exeFile = File(
                               '${programDirectory.path}\\UltraVNC_1436_X64_Setup.exe');
                           append("Done");
 
        
-                          log("Locate ClipboardReader file... ");
-                          var ClipboardReaderExeFile = File(
-                              '${programDirectory.path}\\ClipboardReader.exe');
-                          append("Done");
 
                           log("Copy uVNC executable to destination file... ");
                           if (exeFile.existsSync()) {
@@ -574,18 +580,6 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           ]);
                           append("Done (${result.exitCode})");
 
-                          log("Stop service... ");
-                          ProcessResult stopServiceResult = await Process.run(
-                              'net', ['stop', 'uvnc_service']);
-                          append("Done (${stopServiceResult.exitCode})");
-
-                          log("Set repeater... ");
-                          String iniString = getIniString(
-                              repeaterId, repeaterHost, repeaterPort);
-                          var iniFile = File(
-                              'C:\\Program Files\\uvnc bvba\\UltraVNC\\ultravnc.ini');
-                          await iniFile.writeAsString(iniString);
-                          append("Done");
 
                           log("Set password... ");
                           var setPasswordPath =
@@ -593,41 +587,53 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                           String accessPassword = appState.accessPassword ?? "";
                           ProcessResult setPasswordResult = await Process.run(
                               setPasswordPath, [accessPassword]);
-                          append("Done (${setPasswordResult.stdout})");
+                          append("Done (${setPasswordResult.stderr})");
+
 
                           log("Start service... ");
-                          ProcessResult startServiceResult = await Process.run(
-                              'net', ['start', 'uvnc_service']);
-                          append("Done (${startServiceResult.exitCode})");
-
-                          log("Copy ClipboardReader executable to destination file... ");
-                          if (ClipboardReaderExeFile.existsSync()) {
-                            await ClipboardReaderExeFile.delete();
-                          }
-                          ClipboardReaderExeFile.writeAsBytesSync(
-                              ClipboardReaderExeBytes.buffer.asUint8List());
+                           await Process.start('C:\\Program Files\\uvnc bvba\\UltraVNC\\winvnc.exe',[]);
                           append("Done");
 
-                          log("Start ClipboardReader... ");
-                          ProcessResult startClipboardReaderResult =
-                              await Process.run('powershell', [
-                            '-Command',
-                            'Start-Process -WindowStyle hidden -FilePath  "$programDirectoryPath\\ClipboardReader.exe"'
-                          ]);
-                          append(
-                              "Done (${startClipboardReaderResult.exitCode})");
+                            append("Waiting for VNC server to be ready...");
 
-                          log("Setting ClipboardReader as startup application...");
-                          String programPath =
-                              "$programDirectoryPath\\ClipboardReader.exe";
-                          ProcessResult setStartupResult =
-                              await Process.run('powershell', [
-                            '-Command',
-                            r'Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "ClipboardReader" -Value "' +
-                                programPath +
-                                r'"'
-                          ]);
-                          append("Done (${setStartupResult.exitCode})");
+                              bool isReady = false;
+                              while (!isReady) {
+                                isReady = await checkPortOpen('localhost', 5900);  // VNC 서버 포트를 확인
+                                await Future.delayed(Duration(seconds: 1));
+                              }
+
+                              append("VNC server is ready, proceeding...");
+
+
+                           log("repeater Set...");
+                            String repeaterCommandPath = 'C:\\Program Files\\uvnc bvba\\UltraVNC\\winvnc.exe';
+                            List<String> repeaterCommandArgs = [
+                              '-autoreconnect',
+                              'ID:$repeaterId',
+                              '-connect',
+                              '$repeaterHost:$repeaterPort'
+                            ];
+                            ProcessResult repeaterSetResult = await Process.run(
+                              repeaterCommandPath,
+                              repeaterCommandArgs
+                            );
+              
+                            append("Done (${repeaterSetResult.exitCode})");
+
+                            log("file transfer repeater Set...");
+                            String ftRepeaterCommandPath = 'C:\\Program Files\\uvnc bvba\\UltraVNC\\winvnc.exe';
+                            List<String> ftRepeaterCommandArgs = [
+                              '-autoreconnect',
+                              'ID:$secondaryRepeaterId',
+                              '-connect',
+                              '$repeaterHost:$repeaterPort'
+                            ];
+                            ProcessResult ftRepeaterSetResult = await Process.run(
+                              ftRepeaterCommandPath,
+                              ftRepeaterCommandArgs
+                            );
+                            append("Done (${ftRepeaterSetResult.exitCode})");
+                    
 
                           log("reg delete PendingFileRenameOperations... ");
                           ProcessResult deletaRegResult = await Process.run(
@@ -652,7 +658,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
 
                           setState(() {
                             isProcessing = false;
-                            if (startServiceResult.exitCode == 0) {
+                            if (ftRepeaterSetResult.exitCode == 0) {
                               setState(() {
                                 setupFinished = true;
                               });
@@ -773,7 +779,7 @@ class _ServerSetupPageState extends State<ServerSetupPage> {
                               parseConfig(await File(filePath).readAsString());
                               String reconnectId = config['reconnect']['reconnectId'];
 
-                              final Uri url = Uri.parse('https://vnc.megabridge.co.kr:8443/files/download?reconnectId=$reconnectId');
+                              final Uri url = Uri.parse('https://$apiHost:$apiPort/files/download?reconnectId=$reconnectId');
 
                               if (await canLaunchUrl(url)) {
                                 await launchUrl(url);

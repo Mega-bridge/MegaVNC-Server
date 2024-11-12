@@ -4,7 +4,6 @@ Dir=C:\Program Files\uvnc bvba\UltraVNC
 Group=UltraVNC
 NoIcons=0
 SetupType=server
-Components=ultravnc_server
 Tasks=installservice
 [reconnect]
 reconnectId=default
